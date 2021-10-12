@@ -19,8 +19,10 @@ Compiling Morpheus as a dynamic library follows the standard method for NGINX mo
 
 Once the dynamic lib ngx_http_morpheus_module.so has been created, it should be copied to the loadable lib dir of NGINX. In version 1.18.0 this is usually `/usr/lib/nginx/modules/` but is configurable in the NGINX conf file.
 
-The `nginx_morpheus.conf` file in this repo is an example of a working config with Morpheus enabled. The normal steps on Ubuntu 20.04
-to install this conf file and restart NGINX with Morpheus are:
+To enable the dash+xml application type, copy `mime_types.types` to `/etc/nginx/`.
+
+The `nginx_morpheus.conf` in this repo is an example of a working config with Morpheus enabled. After the dynamic lib and `mime.types`
+are in place, the normal steps on Ubuntu 20.04 to install the conf and restart NGINX with Morpheus are:
 
 ```
 sudo systemctl stop nginx
