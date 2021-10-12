@@ -3,7 +3,7 @@
 
 Morhpeus is an NGINX module that processes MPDs. It runs validation checks and can change MPD elements as part of packaging processing done by NGINX serving as a content origin.
 
-The goal of Morpheus is to adjust MPDs on the fly to conform to the DASH specification, correct errors, and test experimental features. Once built and installed, Morpheus runs on every file ending in suffix ``mpd'' (\*.mpd) that is uploaded to the NGINX server using HTTP POST or PUT by the media presentation author.
+The goal of Morpheus is to adjust MPDs on the fly to conform to the DASH specification, correct errors, and test experimental features. Once built and installed, Morpheus runs on every file ending in suffix "mpd" (\*.mpd) that is uploaded to the NGINX server using HTTP POST or PUT by the media presentation author.
 
 ### Building
 
