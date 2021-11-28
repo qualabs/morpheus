@@ -72,6 +72,7 @@ static char *ngx_http_morpheus_merge_loc_conf(ngx_conf_t *cf,
 static ngx_int_t ngx_http_morpheus_init(ngx_conf_t *cf);
 
 static char *ngx_http_morpheus(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+void morph_process(const char* td);
 
 static ngx_conf_bitmask_t  ngx_http_morpheus_methods_mask[] = {
     { ngx_string("off"), NGX_HTTP_DAV_OFF },
@@ -287,81 +288,7 @@ ngx_http_morpheus_put_handler(ngx_http_request_t *r)
     ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                    "MORPHEUS temp filename: \"%s\"", temp->data);
 
-    
-    /* load temp->data
-     * change the conents
-     * save temp->data
-     */
-    pugi::xml_document doc;
-    doc.load_file((const char*)temp->data);
-
-    //add our own UTC timing descriptor
-    pugi::xml_node mpd = doc.child("MPD");
-
-    pugi::xml_attribute presdel = mpd.append_attribute("suggestedPresentationDelay");
-    presdel.set_value("15");
-
-    mpd.remove_child("UTCTiming");
-    pugi::xml_node utc = mpd.append_child("UTCTiming");
-
-    pugi::xml_attribute siu = utc.append_attribute("schemeIdUri");
-    siu.set_value("urn:mpeg:dash:utc:direct:2014");
-
-    pugi::xml_attribute val = utc.append_attribute("value");
-    
-    //much simpler code for 1 second precision
-    /*
-    time_t now;
-    time(&now);
-    char buf[sizeof "2011-10-08T07:07:09Z"];
-    strftime(buf, sizeof buf, "%FT%TZ", gmtime(&now));
-    */
-
-    //millisecond precision
-    using namespace std::chrono;
-    system_clock::time_point now = system_clock::now();
-    time_t timet = system_clock::to_time_t(now);
-    std::tm tm{};
-
-    std::string format = std::string(u8"%FT%T.").append(std::to_string(duration_cast<milliseconds>(now.time_since_epoch()).count() % static_cast<long long>(1000)));
-
-    gmtime_r(&timet, &tm);
-    std::string res = std::string(255, 0);
-    const size_t length = std::strftime(&res[0], res.size(), format.c_str(), &tm);
-    res.resize(length);
-
-    val.set_value(res.c_str());
-
-    //remove scanType if value is progressive
-    pugi::xpath_query query_scan_type("/MPD/Period/AdaptationSet/Representation");
-    pugi::xpath_node_set scan_items = query_scan_type.evaluate_node_set(doc);
-    for (pugi::xpath_node_set::const_iterator it = scan_items.begin(); it != scan_items.end(); ++it)
-    {
-        pugi::xpath_node node = *it;
-        std::string val = node.node().attribute("scanType").value();
-        if ( val == "progressive")
-            node.node().remove_attribute("scanType");
-    }
-
-    //remove startNumber if no $Number$ 
-    const std::regex reg("\\$Number.*\\$");
-    pugi::xpath_query query_remote_timelines("/MPD/Period/AdaptationSet/SegmentTemplate");
-    pugi::xpath_node_set items = query_remote_timelines.evaluate_node_set(doc);
-    for (pugi::xpath_node_set::const_iterator it = items.begin(); it != items.end(); ++it)
-    {
-        pugi::xpath_node node = *it;
-        if ( node.node().attribute("media") )
-        {
-            std::string val = node.node().attribute("media").value();
-            if ( std::regex_search(val, reg) )
-                continue;
-            //the SegmentTemplate does not include the $Number$
-            //string, remove the startNumber attribute
-            node.node().remove_attribute("startNumber");
-        }
-    }
-
-    doc.save_file((const char*)temp->data);
+    morph_process((const char*)temp->data);
 
     if (ngx_file_info(path.data, &fi) == NGX_FILE_ERROR) {
         status = NGX_HTTP_CREATED;
