@@ -1,6 +1,6 @@
 /*
- * Copyright (C) ab 11/29/21
- */
+* Copyright (C) ab 11/29/21
+*/
 
 #include <iostream>
 #include <sstream>
@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-void morph_process (const char* tempdata) {
+void morph_process(const char* tempdata) {
     /* load tempdata
      * change the conents
      * save tempdata
@@ -94,5 +94,4 @@ void morph_process (const char* tempdata) {
 #ifdef __cplusplus
 }
 #endif
-
 
