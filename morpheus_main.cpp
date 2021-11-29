@@ -4,14 +4,21 @@
 extern "C" {
 #endif
 
+using namespace std;
+
 void morph_process(const char* td);
 
-int main (void) {
+int main (int argc, char *argv[]) {
 
-    const char* inmpd = "bbb.mpd";
+     if (argc < 2) {
+        cout << "Usage: " << argv[0] << " filename.mpd" << endl;
+        return EXIT_FAILURE;
+    }
+
+    const char *inmpd = argv[1];
     morph_process(inmpd);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 #ifdef __cplusplus
