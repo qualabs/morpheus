@@ -1,7 +1,7 @@
 
 ## Morpheus
 
-Morhpeus is an NGINX module that processes MPDs. It runs validation checks and can change MPD elements as part of packaging processing done by NGINX serving as a content origin.
+Morhpeus is an NGINX module that processes MPDs. It runs validation checks and can change MPD elements as part of packaging processing done by NGINX serving as a content origin. It can also run as a stand-alone program without NGINX as described below.
 
 The goal of Morpheus is to adjust MPDs on the fly to conform to the DASH specification, correct errors, and test experimental features. Once built and installed, Morpheus runs on every file ending in suffix "mpd" (\*.mpd) that is uploaded to the NGINX server using HTTP POST or PUT by the media presentation author.
 
@@ -21,14 +21,26 @@ Once the dynamic lib ngx_http_morpheus_module.so has been created, it should be 
 
 To enable the dash+xml application type, copy `mime_types.types` to `/etc/nginx/`.
 
-The `nginx_morpheus.conf` in this repo is an example of a working config with Morpheus enabled. After the dynamic lib and `mime.types`
-are in place, the normal steps on Ubuntu 20.04 to install the conf and restart NGINX with Morpheus are:
+The `nginx_morpheus.conf` in this repo is an example of a working config with Morpheus enabled. The normal steps on Ubuntu 20.04 to install the conf, mime.types, and module and restart NGINX with Morpheus are:
 
 ```
 sudo systemctl stop nginx
+sudo cp nginx/objs/ngx_http_morpheus_module.so /usr/lib/nginx/modules/
 sudo cp nginx_morpheus.conf /etc/nginx/nginx.conf
+sudo cp mime.types /etc/nginx/
 sudo systemctl start nginx
 ```
+
+### Stand-alone
+
+Morpheus can also be built as a stand-alone binary. The provided `Makefile` accomplishes this. For example:
+
+```
+make
+```
+
+will build an executable called `morphdriver` which can then be run on MPD files on the local disk. `morphdriver` does the same processing as the Morpheus NGINX plugin.
+
 
 
 
