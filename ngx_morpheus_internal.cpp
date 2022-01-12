@@ -13,13 +13,71 @@
 extern "C" {
 #endif
 
-void morph_process(const char* tempdata) {
-    /* load tempdata
-     * change the conents
-     * save tempdata
+pugi::xml_document morph_drm(const char* tempdata, const char* drmconf) {
+
+    pugi::xml_document mpddoc, drmdoc;
+    mpddoc.load_file((const char*)tempdata);
+    drmdoc.load_file((const char*)drmconf);
+
+    pugi::xml_node adsets = mpddoc.child("MPD").child("Period");
+
+    /* from drmdoc need:
+    *    <iv>
+    *    <drm-key-id>
+    *    <attribute-list> <attribute key="ckmMetaData">
+    */
+    pugi::xml_node ns2 = drmdoc.child("ns2:rck");
+    const char* iv = ns2.child_value("iv");
+    const char* drmkeyid = ns2.child_value("drm-key-id");
+    const char* ckmmdata;
+
+    pugi::xml_node atrblist = ns2.child("attribute-list");
+    for (pugi::xml_node atrb = atrblist.first_child(); atrb; atrb = atrb.next_sibling())
+    {
+        std::string key = atrb.attribute("key").value();
+        if (key == "ckmMetaData")
+        {
+            ckmmdata = atrb.child_value();
+            break;
+        }
+    }
+
+    for (pugi::xml_node adset = adsets.first_child(); adset; adset = adset.next_sibling())
+    {
+        pugi::xml_node conprot = adset.prepend_child("ContentProtection");
+        pugi::xml_node segenc = conprot.append_child("SegmentEncryption");
+        pugi::xml_node cryper = conprot.append_child("CryptoPeriod");
+
+        pugi::xml_attribute cryper_iv = cryper.append_attribute("IV");
+        cryper_iv.set_value(iv);
+
+        pugi::xml_attribute cryper_kut = cryper.append_attribute("keyUriTemplate");
+        std::string kut_string = std::string("tag:car.comcast.com,2016:ckm/clk/drm/none/drmkid/").append(drmkeyid);
+        kut_string = kut_string.append("/ckmmetadata/");
+        kut_string = kut_string.append(ckmmdata);
+
+        cryper_kut.set_value(kut_string.c_str());
+
+        pugi::xml_attribute segenc_siu = segenc.append_attribute("schemeIdUri");
+        segenc_siu.set_value("urn:mpeg:dash:sea:cenc-cbcs:2016");
+
+        pugi::xml_attribute conprot_siu = conprot.append_attribute("schemeIdUri");
+        conprot_siu.set_value("urn:mpeg:dash:sea:2013");
+    }
+
+    return mpddoc;
+}
+
+void morph_process(const char* tempdata, const char* drmconf) {
+    /* if drmconf exists, add drm pieces
+     * then do the other modifications
+     * to the mpd
      */
     pugi::xml_document doc;
-    doc.load_file((const char*)tempdata);
+    if (drmconf)
+        doc = morph_drm(tempdata, drmconf);
+    else
+        doc.load_file((const char*)tempdata);
 
     pugi::xml_node mpd = doc.child("MPD");
 
@@ -66,7 +124,7 @@ void morph_process(const char* tempdata) {
     {
         pugi::xpath_node node = *it;
         std::string val = node.node().attribute("scanType").value();
-        if ( val == "progressive")
+        if (val == "progressive")
             node.node().remove_attribute("scanType");
     }
 
