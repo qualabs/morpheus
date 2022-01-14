@@ -13,15 +13,25 @@
 extern "C" {
 #endif
 
-pugi::xml_document morph_drm(const char* tempdata, const char* drmconf) {
+void morph_iframes(pugi::xml_document& mpddoc, const char* iframesmpd) {
+    /* take the first adaptationset in iframesmpd
+    *  and put it in mpddoc
+    */
+    pugi::xml_document iframesdoc;
 
-    pugi::xml_document mpddoc, drmdoc;
-    mpddoc.load_file((const char*)tempdata);
-    drmdoc.load_file((const char*)drmconf);
-
+    iframesdoc.load_file((const char*)iframesmpd);
+    pugi::xml_node iframe_adset = iframesdoc.child("MPD").child("Period").child("AdaptationSet");
     pugi::xml_node adsets = mpddoc.child("MPD").child("Period");
 
-    /* from drmdoc need:
+    adsets.append_copy(iframe_adset);
+}
+
+void morph_drm(pugi::xml_document& mpddoc, const char* drmconf) {
+
+    pugi::xml_document drmdoc;
+    drmdoc.load_file((const char*)drmconf);
+
+    /* from drmconf need:
     *    <iv>
     *    <drm-key-id>
     *    <attribute-list> <attribute key="ckmMetaData">
@@ -41,6 +51,8 @@ pugi::xml_document morph_drm(const char* tempdata, const char* drmconf) {
             break;
         }
     }
+
+    pugi::xml_node adsets = mpddoc.child("MPD").child("Period");
 
     for (pugi::xml_node adset = adsets.first_child(); adset; adset = adset.next_sibling())
     {
@@ -64,20 +76,21 @@ pugi::xml_document morph_drm(const char* tempdata, const char* drmconf) {
         pugi::xml_attribute conprot_siu = conprot.append_attribute("schemeIdUri");
         conprot_siu.set_value("urn:mpeg:dash:sea:2013");
     }
-
-    return mpddoc;
 }
 
-void morph_process(const char* tempdata, const char* drmconf) {
-    /* if drmconf exists, add drm pieces
-     * then do the other modifications
-     * to the mpd
+void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd) {
+    /* if iframes track mpd exists add its' AdaptationSet first
+     * then if drmconf exists, add drm pieces
+     * then do the other modifications to the mpd
      */
     pugi::xml_document doc;
+    doc.load_file((const char*)encmpd);
+
+    if (iframesmpd)
+        morph_iframes(doc, iframesmpd);
+
     if (drmconf)
-        doc = morph_drm(tempdata, drmconf);
-    else
-        doc.load_file((const char*)tempdata);
+        morph_drm(doc, drmconf);
 
     pugi::xml_node mpd = doc.child("MPD");
 
@@ -146,7 +159,7 @@ void morph_process(const char* tempdata, const char* drmconf) {
         }
     }
 
-    doc.save_file((const char*)tempdata);
+    doc.save_file((const char*)encmpd);
 }
 
 #ifdef __cplusplus

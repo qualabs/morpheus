@@ -7,7 +7,7 @@ OBJS = $(SRCS:.cpp=.o)
 
 all: morphdriver
 
-morphdriver: $(OBJS)
+morphdriver: $(OBJS) cxxopts.hpp
 	$(CC) $(CFLAGS) $(SRCS) -o $@
 
 clean:
