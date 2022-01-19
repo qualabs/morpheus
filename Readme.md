@@ -3,7 +3,7 @@
 
 Morhpeus is an NGINX module that processes MPDs. It runs validation checks and can change MPD elements as part of packaging processing done by NGINX serving as a content origin. It can also run as a stand-alone program without NGINX as described below.
 
-The goal of Morpheus is to adjust MPDs on the fly to conform to the DASH specification, correct errors, and test experimental features. Once built and installed, Morpheus runs on every file ending in suffix "mpd" (\*.mpd) that is uploaded to the NGINX server using HTTP POST or PUT by the media presentation author.
+The goal of Morpheus is to adjust MPDs on the fly to conform to the DASH specification, correct errors, and test experimental features. Once built and installed, Morpheus runs on every file ending in "mpd" (\*.mpd) that is uploaded to the NGINX server using HTTP POST or PUT by the media presentation author.
 
 ### Building
 
@@ -39,8 +39,23 @@ Morpheus can also be built as a stand-alone binary. The provided `Makefile` acco
 make
 ```
 
-will build an executable called `morphdriver` which can then be run on MPD files on the local disk. `morphdriver` does the same processing as the Morpheus NGINX plugin.
+will build an executable called `morphdriver` which can then be run locally on MPD files. `morphdriver` does the same processing as the Morpheus NGINX plugin and adds a few additional features. Given a CKM response for an encryption context in xml format, it adds ContentProtection elements to the AdaptationSets in the mpd. It can also add an I frame track for trick modes if an I frames mpd is provided.
+
+`morphdriver` without arguments or `morphdriver -h` shows the usage
 
 
+```
+$ ./morphdriver -h
+morpheus VOD stand-alone tool
+Usage:
+  ./morphdriver [OPTION...]
+
+  -n arg      encoder mpd file
+  -i arg      iframes track mpd file
+  -d arg      ckm encrypt context response xml file
+  -h, --help  Print help
+```
+
+Building the `morphdriver` executable requires cxxopts.hpp, which is also included. 
 
 
