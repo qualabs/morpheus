@@ -21,7 +21,7 @@ int main (int argc, char *argv[]) {
             ("n", "encoder mpd file", cxxopts::value<string>())
             ("i", "iframes track mpd file", cxxopts::value<string>())
             ("d", "ckm encrypt context response xml file", cxxopts::value<string>())
-            ("h,help", "Print help")
+            ("h,help", "Print this help")
             ;
 
         auto result = options.parse(argc, argv);

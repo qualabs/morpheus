@@ -275,18 +275,19 @@ ngx_http_morpheus_put_handler(ngx_http_request_t *r)
 
     path.len--;
 
+    /*
     ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                    "MORPHEUS dbg http put filename: \"%s\"", path.data);
 
-    /*
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "http put filename: \"%s\"", path.data);
-   */
 
-    temp = &r->request_body->temp_file->file.name;
 
     ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                    "MORPHEUS temp filename: \"%s\"", temp->data);
+   */
+
+    temp = &r->request_body->temp_file->file.name;
 
     morph_process((const char*)temp->data, NULL, NULL);
 
