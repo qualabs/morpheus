@@ -1287,6 +1287,13 @@ namespace cxxopts
       return m_long;
     }
 
+    CXXOPTS_NODISCARD
+    const std::string&
+    essential_name() const
+    {
+      return m_long.empty() ? m_short : m_long;
+    }
+
     size_t
     hash() const
     {
@@ -1825,6 +1832,11 @@ namespace cxxopts
     const HelpGroupDetails&
     group_help(const std::string& group) const;
 
+    const std::string& program() const
+    {
+      return m_program;
+    }
+
     private:
 
     void
@@ -1862,9 +1874,6 @@ namespace cxxopts
 
     //mapping from groups to help options
     std::map<std::string, HelpGroupDetails> m_help{};
-
-    std::list<OptionDetails> m_option_list{};
-    std::unordered_map<std::string, decltype(m_option_list)::iterator> m_option_map{};
   };
 
   class OptionAdder
@@ -2150,7 +2159,7 @@ OptionParser::parse_default(const std::shared_ptr<OptionDetails>& details)
   // TODO: remove the duplicate code here
   auto& store = m_parsed[details->hash()];
   store.parse_default(details);
-  m_defaults.emplace_back(details->long_name(), details->value().get_default_value());
+  m_defaults.emplace_back(details->essential_name(), details->value().get_default_value());
 }
 
 inline
@@ -2174,7 +2183,7 @@ OptionParser::parse_option
   auto& result = m_parsed[hash];
   result.parse(value, arg);
 
-  m_sequential.emplace_back(value->long_name(), arg);
+  m_sequential.emplace_back(value->essential_name(), arg);
 }
 
 inline
@@ -2502,11 +2511,6 @@ Options::add_option
   {
     add_one_option(l, option);
   }
-
-  m_option_list.push_front(*option.get());
-  auto iter = m_option_list.begin();
-  m_option_map[s] = iter;
-  m_option_map[l] = iter;
 
   //add the help details
   auto& options = m_help[group];
