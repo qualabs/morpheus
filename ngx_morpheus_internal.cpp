@@ -39,7 +39,7 @@ void morph_drm(pugi::xml_document& mpddoc, const char* drmconf) {
     pugi::xml_node ns2 = drmdoc.child("ns2:rck");
     const char* iv = ns2.child_value("iv");
     const char* drmkeyid = ns2.child_value("drm-key-id");
-    const char* ckmmdata;
+    const char* ckmmdata = "temp";
 
     pugi::xml_node atrblist = ns2.child("attribute-list");
     for (pugi::xml_node atrb = atrblist.first_child(); atrb; atrb = atrb.next_sibling())
