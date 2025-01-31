@@ -7,7 +7,7 @@ The goal of Morpheus is to adjust MPDs on the fly to conform to the DASH specifi
 
 ### Building
 
-Morpheus compiles with g++ 9.3.0 on Ubuntu 20.04 with NGINX 1.18.0. No other compilers or versions have been tried. Pugixml is a dependency and is used by Morpheus for all xml processing. The pugixml files that are required are included in this repo.
+Morpheus compiles with g++ 13.3.0 on Ubuntu 24.04 with NGINX 1.24.0. No other compilers or versions have been tried. Pugixml is a dependency and is used by Morpheus for all xml processing. The pugixml files are not included in this repo.
 
 Compiling Morpheus as a dynamic library follows the standard method for NGINX modules outlined [here](https://www.nginx.com/blog/compiling-dynamic-modules-nginx-plus/). One thing to note is since Morpheus uses c++, the `configure` command should include the standard c++ lib, like so:
 
