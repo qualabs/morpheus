@@ -72,7 +72,7 @@ static char *ngx_http_morpheus_merge_loc_conf(ngx_conf_t *cf,
 static ngx_int_t ngx_http_morpheus_init(ngx_conf_t *cf);
 
 static char *ngx_http_morpheus(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd);
+void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd, const bool alternativeconf);
 
 static ngx_conf_bitmask_t  ngx_http_morpheus_methods_mask[] = {
     { ngx_string("off"), NGX_HTTP_DAV_OFF },
@@ -289,7 +289,7 @@ ngx_http_morpheus_put_handler(ngx_http_request_t *r)
 
     temp = &r->request_body->temp_file->file.name;
 
-    morph_process((const char*)temp->data, NULL, NULL);
+    morph_process((const char*)temp->data, NULL, NULL, NULL);
 
     if (ngx_file_info(path.data, &fi) == NGX_FILE_ERROR) {
         status = NGX_HTTP_CREATED;
