@@ -161,8 +161,11 @@ void morph_process(const char* encmpd, const char* drmconf, const char* iframesm
     pugi::xml_node mpd = doc.child("MPD");
 
     //add suggestedPresentationDelay
-    pugi::xml_attribute presdel = mpd.append_attribute("suggestedPresentationDelay");
-    presdel.set_value("15");
+    pugi::xml_attribute presdel = mpd.attribute("suggestedPresentationDelay");
+    if (!presdel) {
+        presdel = mpd.append_attribute("suggestedPresentationDelay");
+        presdel.set_value("15");
+    }
 
     //add our own UTC timing descriptor
     mpd.remove_child("UTCTiming");
