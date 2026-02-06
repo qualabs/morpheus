@@ -72,7 +72,7 @@ static char *ngx_http_morpheus_merge_loc_conf(ngx_conf_t *cf,
 static ngx_int_t ngx_http_morpheus_init(ngx_conf_t *cf);
 
 static char *ngx_http_morpheus(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd);
+void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd, const bool alternativeconf);
 
 static ngx_conf_bitmask_t  ngx_http_morpheus_methods_mask[] = {
     { ngx_string("off"), NGX_HTTP_DAV_OFF },
@@ -248,11 +248,12 @@ ngx_http_morpheus_put_handler(ngx_http_request_t *r)
 {
     size_t                    root;
     time_t                    date;
-    ngx_str_t                *temp, path;
+    ngx_str_t                *temp, path, mode_value;
     ngx_uint_t                status;
     ngx_file_info_t           fi;
     ngx_ext_rename_file_t     ext;
     ngx_http_morpheus_loc_conf_t  *dlcf;
+    bool scte_to_alternative = false;
 
     if (r->request_body == NULL) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
@@ -289,7 +290,18 @@ ngx_http_morpheus_put_handler(ngx_http_request_t *r)
 
     temp = &r->request_body->temp_file->file.name;
 
-    morph_process((const char*)temp->data, NULL, NULL);
+    #define SCTE_TO_ALT_MODE "scte-to-alternative"
+    if (r->args.len > 0) {
+        if (ngx_http_arg(r, (u_char *) "mode", 4, &mode_value) == NGX_OK) {
+            if (mode_value.len == (sizeof(SCTE_TO_ALT_MODE) - 1) &&
+                ngx_strncmp(mode_value.data, SCTE_TO_ALT_MODE, sizeof(SCTE_TO_ALT_MODE) - 1) == 0)
+            {
+                scte_to_alternative = true;
+            }
+        }
+    }
+
+    morph_process((const char*)temp->data, NULL, NULL, scte_to_alternative);
 
     if (ngx_file_info(path.data, &fi) == NGX_FILE_ERROR) {
         status = NGX_HTTP_CREATED;

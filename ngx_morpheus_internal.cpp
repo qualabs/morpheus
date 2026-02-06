@@ -8,10 +8,18 @@
 #include <regex>
 #include <chrono>
 #include "pugixml.hpp"
+#include <unordered_map>
+
+const std::unordered_map<int, std::string> MANIFEST_URLS = {
+    {1, "https://dash.akamaized.net/dashif/ad-insertion-testcase1/batch2/real/b/ad-insertion-testcase1.mpd"},
+    {2, "https://dash.akamaized.net/dashif/ad-insertion-testcase1/batch2/real/b/ad-insertion-testcase1.mpd"},
+    {3, "https://dash.akamaized.net/dashif/ad-insertion-testcase1/batch2/real/b/ad-insertion-testcase1.mpd"}
+};
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 
 void morph_iframes(pugi::xml_document& mpddoc, const char* iframesmpd) {
     /* take the first adaptationset in iframesmpd
@@ -78,7 +86,62 @@ void morph_drm(pugi::xml_document& mpddoc, const char* drmconf) {
     }
 }
 
-void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd) {
+void morph_alternative(pugi::xml_document& mpddoc) {
+    pugi::xml_node mpd = mpddoc.child("MPD");
+    
+    for (pugi::xml_node period : mpd.children("Period")) {
+        for (pugi::xml_node event_stream : period.children("EventStream")) {
+            
+            std::string scheme_id = event_stream.attribute("schemeIdUri").value();
+            if (scheme_id == "urn:scte:scte35:2013:xml") {
+                
+                event_stream.attribute("schemeIdUri").set_value("urn:mpeg:dash:event:alternativeMPD:replace:2025");
+                
+                if (!event_stream.attribute("xmlns")) {
+                    event_stream.append_attribute("xmlns").set_value("");
+                }
+                
+                for (pugi::xml_node event : event_stream.children("Event")) {
+                    
+                    uint64_t presentationTime = event.attribute("presentationTime").as_ullong(0);
+                    uint64_t duration = event.attribute("duration").as_ullong(0);
+                    
+                    pugi::xml_node scte_section = event.child("scte35:SpliceInfoSection");
+                    if (scte_section) {
+                        pugi::xml_node splice_insert = scte_section.child("scte35:SpliceInsert");
+                        
+                        if (splice_insert) {
+                            int splice_event_id = splice_insert.attribute("spliceEventId").as_int(1);
+                            
+                            pugi::xml_node break_duration = splice_insert.child("scte35:BreakDuration");
+                            
+                            uint64_t scte_duration = break_duration.attribute("duration").as_ullong(0);
+                            
+                            event.remove_child(scte_section);
+                            
+                            pugi::xml_node replace_presentation = event.append_child("ReplacePresentation");
+                            
+                            auto it = MANIFEST_URLS.find(splice_event_id);
+                            if (it == MANIFEST_URLS.end()) {
+                                throw std::runtime_error("Manifest URL not found for spliceEventId: " + std::to_string(splice_event_id));
+                            }
+                            std::string manifest_url = it->second;
+                            
+                            replace_presentation.append_attribute("url").set_value(manifest_url.c_str());
+                            replace_presentation.append_attribute("earliestResolutionTimeOffset").set_value(std::to_string(presentationTime).c_str());
+                            replace_presentation.append_attribute("returnOffset").set_value(std::to_string(duration).c_str());
+                            replace_presentation.append_attribute("maxDuration").set_value(std::to_string(scte_duration).c_str());
+                            replace_presentation.append_attribute("clip").set_value("false");
+                            replace_presentation.append_attribute("startAtPlayhead").set_value("false");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd, const bool alternativeconf) {
     /* if iframes track mpd exists add its' AdaptationSet first
      * then if drmconf exists, add drm pieces
      * then do the other modifications to the mpd
@@ -92,11 +155,17 @@ void morph_process(const char* encmpd, const char* drmconf, const char* iframesm
     if (drmconf)
         morph_drm(doc, drmconf);
 
+    if(alternativeconf)
+        morph_alternative(doc);
+
     pugi::xml_node mpd = doc.child("MPD");
 
     //add suggestedPresentationDelay
-    pugi::xml_attribute presdel = mpd.append_attribute("suggestedPresentationDelay");
-    presdel.set_value("15");
+    pugi::xml_attribute presdel = mpd.attribute("suggestedPresentationDelay");
+    if (!presdel) {
+        presdel = mpd.append_attribute("suggestedPresentationDelay");
+        presdel.set_value("15");
+    }
 
     //add our own UTC timing descriptor
     mpd.remove_child("UTCTiming");
