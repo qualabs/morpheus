@@ -2,7 +2,7 @@
 
 CC = g++
 CFLAGS = -Wall -W -g
-SRCS = ngx_morpheus_internal.cpp morpheus_main.cpp
+SRCS = ngx_morpheus_internal.cpp morpheus_main.cpp pugixml.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 all: morphdriver

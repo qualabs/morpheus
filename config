@@ -2,11 +2,13 @@ ngx_addon_name=ngx_http_morpheus_module
 MORPHEUS_SRCS="                                               \
               $ngx_addon_dir/ngx_http_morpheus_module.cpp     \
               $ngx_addon_dir/ngx_morpheus_internal.cpp        \
+              $ngx_addon_dir/pugixml/pugixml.cpp              \
               "
 
 if test -n "$ngx_module_link"; then
   ngx_module_type=HTTP
   ngx_module_name=ngx_http_morpheus_module
+  ngx_module_incs="$ngx_addon_dir $ngx_addon_dir/pugixml"
   ngx_module_srcs="$MORPHEUS_SRCS"
   . auto/module
 else
