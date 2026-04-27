@@ -7,6 +7,9 @@
 #include <string>
 #include <regex>
 #include <chrono>
+#include <cstring>
+#include <cctype>
+#include <vector>
 #include "pugixml.hpp"
 #include <unordered_map>
 
@@ -15,6 +18,175 @@ const std::unordered_map<int, std::string> MANIFEST_URLS = {
     {2, "https://dash.akamaized.net/dashif/ad-insertion-testcase1/batch2/real/b/ad-insertion-testcase1.mpd"},
     {3, "https://dash.akamaized.net/dashif/ad-insertion-testcase1/batch2/real/b/ad-insertion-testcase1.mpd"}
 };
+
+#define BANNER_AD_URL        "http://localhost:3001/image/html?template_id=17306275-3762-45f9-9a86-c262b8925963&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic&price=UYU200&favourite_colors=red%2Cblue%2Cblack"
+#define SKYSCRAPER_AD_URL    "http://localhost:3001/image/html?template_id=cda83e2d-0cd9-44f6-b1d5-d9c0c62cc203&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic%2Cceliac&favourite_colors=red%2Cblue%2Cblack&favourite_food=chivito"
+#define LSHAPE_RIGHT_AD_URL  "http://localhost:3001/image/html?template_id=7822830e-10ff-449f-a5e6-f92f7899f442&gender=male&country=uruguay&restrictions=celiac&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink"
+#define LSHAPE_LEFT_AD_URL   "http://localhost:3001/image/html?template_id=1ac069f1-0437-4a9d-861b-e29ad552c842&gender=male&country=uruguay&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink&age=27&social_media=%40qualabs"
+
+static std::string fmt_double(double v) {
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%g", v);
+    return buf;
+}
+
+struct vec2 { double x, y; };
+struct squeeze_cfg { bool active; double pct; const char* origin; };
+struct shape_cfg { const char* url; int z; vec2 viewport, size, top_left; squeeze_cfg squeeze; };
+
+static const shape_cfg SHAPE_CONFIGS[] = {
+    // URL                  Z  VIEWPORT      SIZE          TOPLEFT     SQUEEZE
+    { BANNER_AD_URL,        1, {1920, 1080}, {1920, 324},  {0, 756},   {false, 0.0, ""} },
+    { SKYSCRAPER_AD_URL,    1, {1920, 1080}, {480, 1080},  {0, 0},     {false, 0.0, ""} },
+    { LSHAPE_RIGHT_AD_URL, -1, {1.0,1.0},    {1.0,1.0},    {0.0,0.0},  {true,  0.6, "top left"} },
+    { LSHAPE_LEFT_AD_URL,  -1, {1.0,1.0},    {1.0,1.0},    {0.0,0.0},  {true,  0.6, "top right"} },
+};
+
+static int parse_shape(const char* upid_text) {
+    char buf[256] = {};
+    std::strncpy(buf, upid_text, sizeof(buf) - 1);
+
+    // trim leading whitespace
+    char* p = buf;
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') ++p;
+
+    // trim trailing whitespace and '&'
+    char* end = p + std::strlen(p) - 1;
+    while (end > p && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r' || *end == '&'))
+        *end-- = '\0';
+
+    // normalize to lowercase
+    for (char* c = p; *c; ++c)
+        *c = (char)std::tolower((unsigned char)*c);
+
+    if (std::strncmp(p, "shape=", 6) != 0) return -1;
+    const char* val = p + 6;
+
+    if (std::strcmp(val, "banner")       == 0) return 0;
+    if (std::strcmp(val, "skyscraper")   == 0) return 1;
+    if (std::strcmp(val, "lshape-right") == 0) return 2;
+    if (std::strcmp(val, "lshape-left")  == 0) return 3;
+    return -1;
+}
+
+struct overlay_ev {
+    bool is_start;
+    uint32_t seg_id;
+    uint64_t ptime;
+    uint64_t dur;
+    int shape_idx;
+};
+
+void morph_overlay(pugi::xml_document& mpddoc) {
+    pugi::xml_node mpd = mpddoc.child("MPD");
+
+    for (pugi::xml_node period : mpd.children("Period")) {
+        pugi::xml_node scte_stream;
+        for (pugi::xml_node es : period.children("EventStream")) {
+            std::string scheme = es.attribute("schemeIdUri").value();
+            if (scheme.find("scte35") != std::string::npos) {
+                scte_stream = es;
+                break;
+            }
+        }
+        if (!scte_stream) continue;
+
+        uint64_t timescale = scte_stream.attribute("timescale").as_ullong(1000);
+        std::vector<overlay_ev> events;
+
+        for (pugi::xml_node event : scte_stream.children("Event")) {
+            uint64_t ptime = event.attribute("presentationTime").as_ullong(0);
+            uint64_t dur   = event.attribute("duration").as_ullong(0);
+
+            pugi::xml_node section    = event.child("scte35:SpliceInfoSection");
+            if (!section) continue;
+            pugi::xml_node descriptor = section.child("scte35:SegmentationDescriptor");
+            if (!descriptor) continue;
+
+            int type_id = descriptor.attribute("segmentationTypeId").as_int(0);
+
+            const char* seg_id_str = descriptor.attribute("segmentationEventId").value();
+            uint32_t seg_id = seg_id_str[0]
+                ? (uint32_t)std::strtoul(seg_id_str, nullptr, 0)
+                : event.attribute("id").as_uint(0);
+
+            if (type_id == 56) {
+                const char* upid_text = nullptr;
+                for (pugi::xml_node upid : descriptor.children("scte35:SegmentationUpid")) {
+                    if (upid.attribute("segmentationUpidType").as_int(0) == 14) {
+                        upid_text = upid.child_value();
+                        break;
+                    }
+                }
+                if (!upid_text || !upid_text[0]) {
+                    std::cerr << "morpheus: overlay start event id=" << seg_id << " missing UPID type 14, skipping\n";
+                    continue;
+                }
+                int shape_idx = parse_shape(upid_text);
+                if (shape_idx < 0) {
+                    std::cerr << "morpheus: overlay start event id=" << seg_id << " unknown shape, skipping\n";
+                    continue;
+                }
+                events.push_back({true, seg_id, ptime, dur, shape_idx});
+
+            } else if (type_id == 57) {
+                events.push_back({false, seg_id, ptime, 0, -1});
+            }
+        }
+
+        pugi::xml_node new_stream = period.append_child("EventStream");
+        new_stream.append_attribute("schemeIdUri").set_value("urn:scte:dash:scte214-events");
+        new_stream.append_attribute("timescale").set_value((unsigned long long)timescale);
+
+        for (const overlay_ev& oe : events) {
+            pugi::xml_node ev = new_stream.append_child("Event");
+            ev.append_attribute("presentationTime").set_value((unsigned long long)oe.ptime);
+
+            if (oe.is_start) {
+                if (oe.dur > 0)
+                    ev.append_attribute("duration").set_value((unsigned long long)oe.dur);
+                ev.append_attribute("id").set_value((unsigned long)oe.seg_id);
+
+                const shape_cfg& cfg = SHAPE_CONFIGS[oe.shape_idx];
+
+                pugi::xml_node overlay = ev.append_child("OverlayEvent");
+                overlay.append_attribute("uri").set_value(cfg.url);
+                overlay.append_attribute("mimeType").set_value("text/html");
+                overlay.append_attribute("earliestResolutionTime").set_value("0");
+                overlay.append_attribute("loop").set_value("false");
+                overlay.append_attribute("mode").set_value("start");
+                overlay.append_attribute("z").set_value(cfg.z);
+
+                overlay.append_child("Viewport")
+                    .append_attribute("x").set_value(fmt_double(cfg.viewport.x).c_str());
+                overlay.child("Viewport")
+                    .append_attribute("y").set_value(fmt_double(cfg.viewport.y).c_str());
+
+                overlay.append_child("Size")
+                    .append_attribute("x").set_value(fmt_double(cfg.size.x).c_str());
+                overlay.child("Size")
+                    .append_attribute("y").set_value(fmt_double(cfg.size.y).c_str());
+
+                overlay.append_child("TopLeft")
+                    .append_attribute("x").set_value(fmt_double(cfg.top_left.x).c_str());
+                overlay.child("TopLeft")
+                    .append_attribute("y").set_value(fmt_double(cfg.top_left.y).c_str());
+
+                if (cfg.squeeze.active) {
+                    pugi::xml_node sq = overlay.append_child("SqueezeCurrent");
+                    sq.append_attribute("percentage").set_value(fmt_double(cfg.squeeze.pct).c_str());
+                    sq.append_attribute("origin").set_value(cfg.squeeze.origin);
+                }
+            } else {
+                pugi::xml_node overlay = ev.append_child("OverlayEvent");
+                overlay.append_attribute("mode").set_value("stop");
+                overlay.append_attribute("refId").set_value((unsigned long)oe.seg_id);
+            }
+        }
+
+        period.remove_child(scte_stream);
+    }
+}
 
 #ifdef __cplusplus
 extern "C" {
@@ -88,52 +260,59 @@ void morph_drm(pugi::xml_document& mpddoc, const char* drmconf) {
 
 void morph_alternative(pugi::xml_document& mpddoc) {
     pugi::xml_node mpd = mpddoc.child("MPD");
-    
+
     for (pugi::xml_node period : mpd.children("Period")) {
         for (pugi::xml_node event_stream : period.children("EventStream")) {
-            
+
             std::string scheme_id = event_stream.attribute("schemeIdUri").value();
-            if (scheme_id == "urn:scte:scte35:2013:xml") {
-                
-                event_stream.attribute("schemeIdUri").set_value("urn:mpeg:dash:event:alternativeMPD:replace:2025");
-                
-                if (!event_stream.attribute("xmlns")) {
-                    event_stream.append_attribute("xmlns").set_value("");
-                }
-                
-                for (pugi::xml_node event : event_stream.children("Event")) {
-                    
-                    uint64_t presentationTime = event.attribute("presentationTime").as_ullong(0);
-                    uint64_t duration = event.attribute("duration").as_ullong(0);
-                    
-                    pugi::xml_node scte_section = event.child("scte35:SpliceInfoSection");
-                    if (scte_section) {
-                        pugi::xml_node splice_insert = scte_section.child("scte35:SpliceInsert");
-                        
-                        if (splice_insert) {
-                            int splice_event_id = splice_insert.attribute("spliceEventId").as_int(1);
-                            
-                            pugi::xml_node break_duration = splice_insert.child("scte35:BreakDuration");
-                            
-                            uint64_t scte_duration = break_duration.attribute("duration").as_ullong(0);
-                            
-                            event.remove_child(scte_section);
-                            
-                            pugi::xml_node replace_presentation = event.append_child("ReplacePresentation");
-                            
-                            auto it = MANIFEST_URLS.find(splice_event_id);
-                            if (it == MANIFEST_URLS.end()) {
-                                throw std::runtime_error("Manifest URL not found for spliceEventId: " + std::to_string(splice_event_id));
-                            }
-                            std::string manifest_url = it->second;
-                            
-                            replace_presentation.append_attribute("url").set_value(manifest_url.c_str());
-                            replace_presentation.append_attribute("earliestResolutionTimeOffset").set_value(std::to_string(presentationTime).c_str());
-                            replace_presentation.append_attribute("returnOffset").set_value(std::to_string(duration).c_str());
-                            replace_presentation.append_attribute("maxDuration").set_value(std::to_string(scte_duration).c_str());
-                            replace_presentation.append_attribute("clip").set_value("false");
-                            replace_presentation.append_attribute("startAtPlayhead").set_value("false");
+            if (scheme_id != "urn:scte:scte35:2013:xml") continue;
+
+            // Only claim streams that actually contain SpliceInsert events
+            bool has_splice_insert = false;
+            for (pugi::xml_node ev : event_stream.children("Event")) {
+                pugi::xml_node sec = ev.child("scte35:SpliceInfoSection");
+                if (sec && sec.child("scte35:SpliceInsert")) { has_splice_insert = true; break; }
+            }
+            if (!has_splice_insert) continue;
+
+            event_stream.attribute("schemeIdUri").set_value("urn:mpeg:dash:event:alternativeMPD:replace:2025");
+
+            if (!event_stream.attribute("xmlns")) {
+                event_stream.append_attribute("xmlns").set_value("");
+            }
+
+            for (pugi::xml_node event : event_stream.children("Event")) {
+
+                uint64_t presentationTime = event.attribute("presentationTime").as_ullong(0);
+                uint64_t duration = event.attribute("duration").as_ullong(0);
+
+                pugi::xml_node scte_section = event.child("scte35:SpliceInfoSection");
+                if (scte_section) {
+                    pugi::xml_node splice_insert = scte_section.child("scte35:SpliceInsert");
+
+                    if (splice_insert) {
+                        int splice_event_id = splice_insert.attribute("spliceEventId").as_int(1);
+
+                        pugi::xml_node break_duration = splice_insert.child("scte35:BreakDuration");
+
+                        uint64_t scte_duration = break_duration.attribute("duration").as_ullong(0);
+
+                        event.remove_child(scte_section);
+
+                        pugi::xml_node replace_presentation = event.append_child("ReplacePresentation");
+
+                        auto it = MANIFEST_URLS.find(splice_event_id);
+                        if (it == MANIFEST_URLS.end()) {
+                            throw std::runtime_error("Manifest URL not found for spliceEventId: " + std::to_string(splice_event_id));
                         }
+                        std::string manifest_url = it->second;
+
+                        replace_presentation.append_attribute("url").set_value(manifest_url.c_str());
+                        replace_presentation.append_attribute("earliestResolutionTimeOffset").set_value(std::to_string(presentationTime).c_str());
+                        replace_presentation.append_attribute("returnOffset").set_value(std::to_string(duration).c_str());
+                        replace_presentation.append_attribute("maxDuration").set_value(std::to_string(scte_duration).c_str());
+                        replace_presentation.append_attribute("clip").set_value("false");
+                        replace_presentation.append_attribute("startAtPlayhead").set_value("false");
                     }
                 }
             }
@@ -141,11 +320,7 @@ void morph_alternative(pugi::xml_document& mpddoc) {
     }
 }
 
-void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd, const bool alternativeconf) {
-    /* if iframes track mpd exists add its' AdaptationSet first
-     * then if drmconf exists, add drm pieces
-     * then do the other modifications to the mpd
-     */
+void morph_process(const char* encmpd, const char* drmconf, const char* iframesmpd) {
     pugi::xml_document doc;
     doc.load_file((const char*)encmpd);
 
@@ -155,8 +330,8 @@ void morph_process(const char* encmpd, const char* drmconf, const char* iframesm
     if (drmconf)
         morph_drm(doc, drmconf);
 
-    if(alternativeconf)
-        morph_alternative(doc);
+    morph_alternative(doc);
+    morph_overlay(doc);
 
     pugi::xml_node mpd = doc.child("MPD");
 
