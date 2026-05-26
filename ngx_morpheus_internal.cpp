@@ -102,6 +102,16 @@ struct overlay_ev {
 void morph_overlay(pugi::xml_document& mpddoc) {
     pugi::xml_node mpd = mpddoc.child("MPD");
 
+    if (!mpd.find_child_by_attribute("SupplementalProperty", "schemeIdUri", "urn:mpeg:dash:urlparam:2016")) {
+        pugi::xml_node sp = mpd.prepend_child("SupplementalProperty");
+        sp.append_attribute("schemeIdUri").set_value("urn:mpeg:dash:urlparam:2016");
+        pugi::xml_node eqi = sp.append_child("up:ExtUrlQueryInfo");
+        eqi.append_attribute("xmlns:up").set_value("urn:mpeg:dash:schema:urlparam:2016");
+        eqi.append_attribute("useMPDUrlQuery").set_value("true");
+        eqi.append_attribute("queryTemplate").set_value("$querypart$");
+        eqi.append_attribute("includeInRequests").set_value("urn:scte:dash:scte214-events");
+    }
+
     for (pugi::xml_node period : mpd.children("Period")) {
         pugi::xml_node scte_stream;
         for (pugi::xml_node es : period.children("EventStream")) {
@@ -175,7 +185,7 @@ void morph_overlay(pugi::xml_document& mpddoc) {
                 std::string ad_url = build_ad_url(cfg);
                 overlay.append_attribute("uri").set_value(ad_url.c_str());
                 overlay.append_attribute("mimeType").set_value("text/html");
-                overlay.append_attribute("earliestResolutionTime").set_value("0");
+                overlay.append_attribute("earliestResolutionTime").set_value("35000");
                 overlay.append_attribute("loop").set_value("false");
                 overlay.append_attribute("mode").set_value("start");
                 overlay.append_attribute("z").set_value(cfg.z);
