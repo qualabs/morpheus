@@ -186,7 +186,7 @@ void morph_overlay(pugi::xml_document& mpddoc) {
                 std::string ad_url = build_ad_url(cfg);
                 overlay.append_attribute("uri").set_value(ad_url.c_str());
                 overlay.append_attribute("mimeType").set_value("text/html");
-                overlay.append_attribute("earliestResolutionTime").set_value("35000");
+                overlay.append_attribute("earliestResolutionTime").set_value("5000");
                 overlay.append_attribute("loop").set_value("false");
                 overlay.append_attribute("mode").set_value("start");
                 overlay.append_attribute("z").set_value(cfg.z);
