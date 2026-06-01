@@ -19,10 +19,10 @@ const std::unordered_map<int, std::string> MANIFEST_URLS = {
     {3, "https://dash.akamaized.net/dashif/ad-insertion-testcase1/batch2/real/b/ad-insertion-testcase1.mpd"}
 };
 
-#define BANNER_AD_URL        "http://localhost:3001/image/html?template_id=17306275-3762-45f9-9a86-c262b8925963&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic&price=UYU200&favourite_colors=red%2Cblue%2Cblack"
-#define SKYSCRAPER_AD_URL    "http://localhost:3001/image/html?template_id=cda83e2d-0cd9-44f6-b1d5-d9c0c62cc203&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic%2Cceliac&favourite_colors=red%2Cblue%2Cblack&favourite_food=chivito"
-#define LSHAPE_RIGHT_AD_URL  "http://localhost:3001/image/html?template_id=7822830e-10ff-449f-a5e6-f92f7899f442&gender=male&country=uruguay&restrictions=celiac&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink"
-#define LSHAPE_LEFT_AD_URL   "http://localhost:3001/image/html?template_id=1ac069f1-0437-4a9d-861b-e29ad552c842&gender=male&country=uruguay&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink&age=27&social_media=%40qualabs"
+#define BANNER_AD_URL        "http://localhost:8888/image/html?template_id=17306275-3762-45f9-9a86-c262b8925963&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic&price=UYU200&favourite_colors=red%2Cblue%2Cblack"
+#define SKYSCRAPER_AD_URL    "http://localhost:8888/image/html?template_id=cda83e2d-0cd9-44f6-b1d5-d9c0c62cc203&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic%2Cceliac&favourite_colors=red%2Cblue%2Cblack&favourite_food=chivito"
+#define LSHAPE_RIGHT_AD_URL  "http://localhost:8888/image/html?template_id=7822830e-10ff-449f-a5e6-f92f7899f442&gender=male&country=uruguay&restrictions=celiac&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink"
+#define LSHAPE_LEFT_AD_URL   "http://localhost:8888/image/html?template_id=1ac069f1-0437-4a9d-861b-e29ad552c842&gender=male&country=uruguay&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink&age=27&social_media=%40qualabs"
 
 static std::string fmt_double(double v) {
     char buf[32];
