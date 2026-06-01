@@ -27,11 +27,12 @@ const std::unordered_map<int, std::string> MANIFEST_URLS = {
 #define DEFAULT_AD_GEN_BASE_URL  "http://localhost:8888"
 
 // Per-shape fallback query strings (everything after "image/html?"), using the
-// repo's original template_ids and targeting params.
-#define DEFAULT_BANNER_QUERY        "template_id=17306275-3762-45f9-9a86-c262b8925963&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic&price=UYU200&favourite_colors=red%2Cblue%2Cblack"
-#define DEFAULT_SKYSCRAPER_QUERY    "template_id=cda83e2d-0cd9-44f6-b1d5-d9c0c62cc203&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic%2Cceliac&favourite_colors=red%2Cblue%2Cblack&favourite_food=chivito"
-#define DEFAULT_LSHAPE_RIGHT_QUERY  "template_id=7822830e-10ff-449f-a5e6-f92f7899f442&gender=male&country=uruguay&restrictions=celiac&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink"
-#define DEFAULT_LSHAPE_LEFT_QUERY   "template_id=1ac069f1-0437-4a9d-861b-e29ad552c842&gender=male&country=uruguay&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink&age=27&social_media=%40qualabs"
+// repo's original template_ids. Personalization params are intentionally not
+// hardcoded: they flow in client-side from the MPD URL query (ExtUrlQueryInfo).
+#define DEFAULT_BANNER_QUERY        "template_id=17306275-3762-45f9-9a86-c262b8925963"
+#define DEFAULT_SKYSCRAPER_QUERY    "template_id=cda83e2d-0cd9-44f6-b1d5-d9c0c62cc203"
+#define DEFAULT_LSHAPE_RIGHT_QUERY  "template_id=7822830e-10ff-449f-a5e6-f92f7899f442"
+#define DEFAULT_LSHAPE_LEFT_QUERY   "template_id=1ac069f1-0437-4a9d-861b-e29ad552c842"
 
 static std::string fmt_double(double v) {
     char buf[32];
