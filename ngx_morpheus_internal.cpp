@@ -8,6 +8,7 @@
 #include <regex>
 #include <chrono>
 #include <cstring>
+#include <cstdlib>
 #include <cctype>
 #include <vector>
 #include "pugixml.hpp"
@@ -19,10 +20,18 @@ const std::unordered_map<int, std::string> MANIFEST_URLS = {
     {3, "https://dash.akamaized.net/dashif/ad-insertion-testcase1/batch2/real/b/ad-insertion-testcase1.mpd"}
 };
 
-#define BANNER_AD_URL        "http://localhost:8888/image/html?template_id=17306275-3762-45f9-9a86-c262b8925963&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic&price=UYU200&favourite_colors=red%2Cblue%2Cblack"
-#define SKYSCRAPER_AD_URL    "http://localhost:8888/image/html?template_id=cda83e2d-0cd9-44f6-b1d5-d9c0c62cc203&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic%2Cceliac&favourite_colors=red%2Cblue%2Cblack&favourite_food=chivito"
-#define LSHAPE_RIGHT_AD_URL  "http://localhost:8888/image/html?template_id=7822830e-10ff-449f-a5e6-f92f7899f442&gender=male&country=uruguay&restrictions=celiac&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink"
-#define LSHAPE_LEFT_AD_URL   "http://localhost:8888/image/html?template_id=1ac069f1-0437-4a9d-861b-e29ad552c842&gender=male&country=uruguay&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink&age=27&social_media=%40qualabs"
+// Overlay ad URLs are configurable at runtime via environment variables, with
+// safe fallback to the compiled defaults below if the env var is unset/empty.
+//   final url = ${AD_GEN_BASE_URL}/image/html?${MORPHEUS_<SHAPE>_QUERY}
+// The base default is intentionally neutral/portable (localhost, not a LAN IP).
+#define DEFAULT_AD_GEN_BASE_URL  "http://localhost:8888"
+
+// Per-shape fallback query strings (everything after "image/html?"), using the
+// repo's original template_ids and targeting params.
+#define DEFAULT_BANNER_QUERY        "template_id=17306275-3762-45f9-9a86-c262b8925963&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic&price=UYU200&favourite_colors=red%2Cblue%2Cblack"
+#define DEFAULT_SKYSCRAPER_QUERY    "template_id=cda83e2d-0cd9-44f6-b1d5-d9c0c62cc203&city=montevideo&gender=male&hobbies=football%2Cmusic&restrictions=diabetic%2Cceliac&favourite_colors=red%2Cblue%2Cblack&favourite_food=chivito"
+#define DEFAULT_LSHAPE_RIGHT_QUERY  "template_id=7822830e-10ff-449f-a5e6-f92f7899f442&gender=male&country=uruguay&restrictions=celiac&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink"
+#define DEFAULT_LSHAPE_LEFT_QUERY   "template_id=1ac069f1-0437-4a9d-861b-e29ad552c842&gender=male&country=uruguay&hobbies=gaming%2Cfootball%2Ctravelling&colors=black%2Cpink&age=27&social_media=%40qualabs"
 
 static std::string fmt_double(double v) {
     char buf[32];
@@ -32,15 +41,28 @@ static std::string fmt_double(double v) {
 
 struct vec2 { double x, y; };
 struct squeeze_cfg { bool active; double pct; const char* origin; };
-struct shape_cfg { const char* url; int z; vec2 viewport, size, top_left; squeeze_cfg squeeze; };
+struct shape_cfg { const char* query_env; const char* query_default; int z; vec2 viewport, size, top_left; squeeze_cfg squeeze; };
 
 static const shape_cfg SHAPE_CONFIGS[] = {
-    // URL                  Z  VIEWPORT      SIZE          TOPLEFT     SQUEEZE
-    { BANNER_AD_URL,        1, {1920, 1080}, {1920, 324},  {0, 756},   {false, 0.0, ""} },
-    { SKYSCRAPER_AD_URL,    1, {1920, 1080}, {480, 1080},  {0, 0},     {false, 0.0, ""} },
-    { LSHAPE_RIGHT_AD_URL, -1, {1.0,1.0},    {1.0,1.0},    {0.0,0.0},  {true,  0.6, "top left"} },
-    { LSHAPE_LEFT_AD_URL,  -1, {1.0,1.0},    {1.0,1.0},    {0.0,0.0},  {true,  0.6, "top right"} },
+    // QUERY_ENV                       QUERY_DEFAULT               Z  VIEWPORT      SIZE          TOPLEFT     SQUEEZE
+    { "MORPHEUS_BANNER_QUERY",        DEFAULT_BANNER_QUERY,        1, {1920, 1080}, {1920, 324},  {0, 756},   {false, 0.0, ""} },
+    { "MORPHEUS_SKYSCRAPER_QUERY",    DEFAULT_SKYSCRAPER_QUERY,    1, {1920, 1080}, {480, 1080},  {0, 0},     {false, 0.0, ""} },
+    { "MORPHEUS_LSHAPE_RIGHT_QUERY",  DEFAULT_LSHAPE_RIGHT_QUERY, -1, {1.0,1.0},    {1.0,1.0},    {0.0,0.0},  {true,  0.6, "top left"} },
+    { "MORPHEUS_LSHAPE_LEFT_QUERY",   DEFAULT_LSHAPE_LEFT_QUERY,  -1, {1.0,1.0},    {1.0,1.0},    {0.0,0.0},  {true,  0.6, "top right"} },
 };
+
+// Build the overlay ad URL for a shape from env vars, falling back to the
+// compiled defaults when an env var is unset or empty.
+static std::string build_ad_url(const shape_cfg& cfg) {
+    const char* base = std::getenv("AD_GEN_BASE_URL");
+    if (!base || !base[0]) base = DEFAULT_AD_GEN_BASE_URL;
+    const char* query = std::getenv(cfg.query_env);
+    if (!query || !query[0]) query = cfg.query_default;
+    std::string b(base);
+    // avoid double slash if base ends with '/'
+    if (!b.empty() && b.back() == '/') b.pop_back();
+    return b + "/image/html?" + query;
+}
 
 static int parse_shape(const char* upid_text) {
     char buf[256] = {};
@@ -150,7 +172,8 @@ void morph_overlay(pugi::xml_document& mpddoc) {
                 const shape_cfg& cfg = SHAPE_CONFIGS[oe.shape_idx];
 
                 pugi::xml_node overlay = ev.append_child("OverlayEvent");
-                overlay.append_attribute("uri").set_value(cfg.url);
+                std::string ad_url = build_ad_url(cfg);
+                overlay.append_attribute("uri").set_value(ad_url.c_str());
                 overlay.append_attribute("mimeType").set_value("text/html");
                 overlay.append_attribute("earliestResolutionTime").set_value("0");
                 overlay.append_attribute("loop").set_value("false");
