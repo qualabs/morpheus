@@ -103,16 +103,6 @@ struct overlay_ev {
 void morph_overlay(pugi::xml_document& mpddoc) {
     pugi::xml_node mpd = mpddoc.child("MPD");
 
-    if (!mpd.find_child_by_attribute("SupplementalProperty", "schemeIdUri", "urn:mpeg:dash:urlparam:2016")) {
-        pugi::xml_node sp = mpd.prepend_child("SupplementalProperty");
-        sp.append_attribute("schemeIdUri").set_value("urn:mpeg:dash:urlparam:2016");
-        pugi::xml_node eqi = sp.append_child("up:ExtUrlQueryInfo");
-        eqi.append_attribute("xmlns:up").set_value("urn:mpeg:dash:schema:urlparam:2016");
-        eqi.append_attribute("useMPDUrlQuery").set_value("true");
-        eqi.append_attribute("queryTemplate").set_value("$querypart$");
-        eqi.append_attribute("includeInRequests").set_value("urn:scte:dash:scte214-events");
-    }
-
     for (pugi::xml_node period : mpd.children("Period")) {
         pugi::xml_node scte_stream;
         for (pugi::xml_node es : period.children("EventStream")) {
@@ -123,6 +113,18 @@ void morph_overlay(pugi::xml_document& mpddoc) {
             }
         }
         if (!scte_stream) continue;
+
+        // Only process EventStreams that carry SCTE-35 segmentation overlay events
+        bool has_segmentation = false;
+        for (pugi::xml_node ev : scte_stream.children("Event")) {
+            pugi::xml_node sec = ev.child("scte35:SpliceInfoSection");
+            if (!sec) continue;
+            pugi::xml_node desc = sec.child("scte35:SegmentationDescriptor");
+            if (!desc) continue;
+            int type_id = desc.attribute("segmentationTypeId").as_int(0);
+            if (type_id == 56 || type_id == 57) { has_segmentation = true; break; }
+        }
+        if (!has_segmentation) continue;
 
         uint64_t timescale = scte_stream.attribute("timescale").as_ullong(1000);
         std::vector<overlay_ev> events;
@@ -167,12 +169,20 @@ void morph_overlay(pugi::xml_document& mpddoc) {
             }
         }
 
-        pugi::xml_node new_stream = period.append_child("EventStream");
-        new_stream.append_attribute("schemeIdUri").set_value("urn:scte:dash:scte214-events");
-        new_stream.append_attribute("timescale").set_value((unsigned long long)timescale);
+        // Remove SCTE-35 Event children, preserving any SupplementalProperty children
+        std::vector<pugi::xml_node> evts_to_remove;
+        for (pugi::xml_node ev : scte_stream.children("Event")) {
+            evts_to_remove.push_back(ev);
+        }
+        for (auto& ev : evts_to_remove) {
+            scte_stream.remove_child(ev);
+        }
+
+        // Convert to overlay EventStream in place
+        scte_stream.attribute("schemeIdUri").set_value("urn:scte:dash:scte214-events");
 
         for (const overlay_ev& oe : events) {
-            pugi::xml_node ev = new_stream.append_child("Event");
+            pugi::xml_node ev = scte_stream.append_child("Event");
             ev.append_attribute("presentationTime").set_value((unsigned long long)oe.ptime);
 
             if (oe.is_start) {
@@ -218,7 +228,30 @@ void morph_overlay(pugi::xml_document& mpddoc) {
             }
         }
 
-        period.remove_child(scte_stream);
+        // If stream-lens injected a urlparam SP, augment it with useMPDUrlQuery.
+        // Otherwise create morpheus's own SP.
+        pugi::xml_node existing_sp;
+        for (pugi::xml_node sp : scte_stream.children("SupplementalProperty")) {
+            if (std::strcmp(sp.attribute("schemeIdUri").value(), "urn:mpeg:dash:urlparam:2016") == 0) {
+                existing_sp = sp;
+                break;
+            }
+        }
+
+        if (existing_sp) {
+            pugi::xml_node eqi = existing_sp.child("up:ExtUrlQueryInfo");
+            if (eqi) {
+                eqi.append_attribute("useMPDUrlQuery").set_value("true");
+            }
+        } else {
+            pugi::xml_node sp = scte_stream.append_child("SupplementalProperty");
+            sp.append_attribute("schemeIdUri").set_value("urn:mpeg:dash:urlparam:2016");
+            pugi::xml_node eqi = sp.append_child("up:ExtUrlQueryInfo");
+            eqi.append_attribute("xmlns:up").set_value("urn:mpeg:dash:schema:urlparam:2016");
+            eqi.append_attribute("useMPDUrlQuery").set_value("true");
+            eqi.append_attribute("queryTemplate").set_value("$querypart$");
+            eqi.append_attribute("includeInRequests").set_value("urn:scte:dash:scte214-events");
+        }
     }
 }
 
