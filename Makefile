@@ -7,9 +7,9 @@ OBJS = $(SRCS:.cpp=.o)
 
 all: morphdriver
 
-morphdriver: $(OBJS) cxxopts.hpp
-	$(CC) $(CFLAGS) $(SRCS) -o $@
+morphdriver: $(OBJS) pugixml.o cxxopts.hpp
+	$(CC) $(CFLAGS) $(OBJS) pugixml.o -o $@
 
 clean:
-	rm -f *.o morphdriver
+	rm -f ngx_morpheus_internal.o morpheus_main.o morphdriver
 
